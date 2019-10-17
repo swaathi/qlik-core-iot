@@ -1,0 +1,82 @@
+version: 2
+jobs:
+  build:
+    machine: true
+    working_directory: ~/app
+    steps:
+      - checkout
+      - run:
+          name: Install node
+          command: |
+            set +e
+            curl -o- https://raw.githubusercontent.com/creationix/nvm/v0.33.5/install.sh | bash
+            export NVM_DIR="/opt/circleci/.nvm"
+            [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+            nvm install v8
+            nvm alias default v8
+            # Each step uses the same `$BASH_ENV`, so need to modify it
+            echo 'export NVM_DIR="/opt/circleci/.nvm"' >> $BASH_ENV
+            echo "[ -s \"$NVM_DIR/nvm.sh\" ] && . \"$NVM_DIR/nvm.sh\"" >> $BASH_ENV
+      - run:
+          name: Install Chrome
+          command: |
+            wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+            sudo dpkg -i google-chrome-stable_current_amd64.deb; sudo apt-get -fy install
+      - run:
+          name: Install dependencies
+          command: npm install --quiet
+      - run:
+          name: Lint
+          command: npm run lint
+      - run:
+          name: Start QIX Engine
+          command: ACCEPT_EULA=yes docker-compose up -d
+      - run:
+          name: Check that QIX Engine is up and running
+          command: |
+            set +e
+
+            # Check that Engine is running
+            ENGINE_ID=$(docker ps -aqf "name=engine")
+            echo "Engine container id is $ENGINE_ID"
+
+            RETRIES=0
+
+            while [[ "$ENGINE_STATUS" != "running" && $RETRIES -le 30 ]]; do
+              ENGINE_STATUS=$(docker inspect -f '{{.State.Status}}' "$ENGINE_ID")
+              echo "Engine status is $ENGINE_STATUS"
+              sleep 2
+              RETRIES=$[$RETRIES+1]
+            done
+
+            if [[ "$ENGINE_STATUS" != "running"  ]]; then
+              echo "QIX Engine did not start up properly"
+              exit 1
+            fi
+      - run:
+          name: Test of hello-engine
+          command: ./test/test-hello-engine.sh
+      - run:
+          name: Test of hello-data and hello-data-halyard
+          command: |
+            ./test/test-hello-data.sh
+            ./test/test-hello-data-halyard.sh
+      - run:
+          name: Start hello-visualization web server
+          background: true
+          command: npm run hello-visualization
+      - run:
+          name: Test of hello-visualization
+          command: |
+            set +e
+            RETRIES=0
+            while [[ $RETRIES -lt 30 ]]; do
+              curl --output /dev/null --silent --head --fail http://localhost:8080
+              if [[ $? -eq 0 ]]; then
+                echo "Web server is up"
+                break
+              fi
+              sleep 2
+              RETRIES=$[$RETRIES+1]
+            done
+            ./test/test-hello-visualization.sh

@@ -1,0 +1,7 @@
+node_modules/
+.idea
+.vscode/
+*.log
+*.orig
+test/__artifacts__/
+.DS_Store

@@ -1,0 +1,16 @@
+{
+  "env": {
+    "node": true,
+    "mocha": true,
+    "protractor": true
+  },
+  "globals": {
+      "EC": true,
+      "expect": true
+  },
+  "parserOptions": {
+    "sourceType": "module"
+  },
+  "extends": "airbnb-base",
+  "root": true
+}
